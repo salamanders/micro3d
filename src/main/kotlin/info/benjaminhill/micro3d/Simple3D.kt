@@ -29,6 +29,7 @@ class Simple3D : AutoCloseable {
             clearBuffer()
             println("Ready to run.")
         }
+        println("Switching to relative mode...")
         sendGCode("G91") // switch to relative mode for the move commands
     }
 
@@ -47,20 +48,19 @@ class Simple3D : AutoCloseable {
         return ports[readln().toInt()]
     }
 
-    private fun sendGCode(gcode: String) {
+
+    private fun sendGCode(gcode: String) = scope.launch {
         require(gcode.startsWith("g", true) || gcode.startsWith("m", true)) { "Rejecting command `${gcode.trim()}`." }
-        scope.launch {
-            val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
-            try {
-                withContext(Dispatchers.IO) {
-                    serialPort.outputStream.write(command.toByteArray())
-                    serialPort.outputStream.flush()
-                }
-                println("sendGCode: ${command.trim()}")
-                waitForOk()
-            } catch (e: IOException) {
-                println("Error sending GCode: ${e.message}")
+        val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
+        try {
+            withContext(Dispatchers.IO) { // Correctly uses Dispatchers.IO for blocking I/O
+                serialPort.outputStream.write(command.toByteArray())
+                serialPort.outputStream.flush()
             }
+            println("Sent GCode: `${command.trim()}`") // Log after sending, inside the launch
+            waitForOk()
+        } catch (e: IOException) {
+            println("Error sending GCode: ${e.message}")
         }
     }
 

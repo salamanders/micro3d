@@ -36,27 +36,28 @@ sealed class GCodeCommand(trigger: String) : Command(trigger) {
     abstract fun toGCode(): String
 
     class MoveXPlus : GCodeCommand("q") {
-        override fun toGCode(): String = "G0 X%.3f Y%.3f Z%.3f".format(STEP_SIZE, 0.0, 0.0)
+        // G91 = relative.  G0 = non-extruder
+        override fun toGCode(): String = RELATIVE_MOVE.format('X', STEP_SIZE)
     }
 
     class MoveXNeg : GCodeCommand("a") {
-        override fun toGCode(): String = "G0 X%.3f Y%.3f Z%.3f".format(-STEP_SIZE, 0.0, 0.0)
+        override fun toGCode(): String = RELATIVE_MOVE.format('X', -STEP_SIZE)
     }
 
     class MoveYPlus : GCodeCommand("w") {
-        override fun toGCode(): String = "G0 X%.3f Y%.3f Z%.3f".format(0.0, STEP_SIZE, 0.0)
+        override fun toGCode(): String = RELATIVE_MOVE.format('Y', STEP_SIZE)
     }
 
     class MoveYNeg : GCodeCommand("s") {
-        override fun toGCode(): String = "G0 X%.3f Y%.3f Z%.3f".format(0.0, -STEP_SIZE, 0.0)
+        override fun toGCode(): String = RELATIVE_MOVE.format('Y', -STEP_SIZE)
     }
 
     class MoveZPlus : GCodeCommand("e") {
-        override fun toGCode(): String = "G0 X%.3f Y%.3f Z%.3f".format(0.0, 0.0, STEP_SIZE)
+        override fun toGCode(): String = RELATIVE_MOVE.format('Z', STEP_SIZE)
     }
 
     class MoveZNeg : GCodeCommand("d") {
-        override fun toGCode(): String = "G0 X%.3f Y%.3f Z%.3f".format(0.0, 0.0, -STEP_SIZE)
+        override fun toGCode(): String = RELATIVE_MOVE.format('Z', -STEP_SIZE)
     }
 
     data object Home : GCodeCommand("home") {
@@ -68,6 +69,8 @@ sealed class GCodeCommand(trigger: String) : Command(trigger) {
     }
 
     companion object {
-        const val STEP_SIZE = 0.1 // Smallest move. Adjust if needed.
+        const val STEP_SIZE: Double = 1.0 // Smallest move. Adjust if needed.
+
+        private const val RELATIVE_MOVE = "G1 %c%.2f"
     }
 }
