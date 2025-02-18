@@ -1,15 +1,23 @@
 package info.benjaminhill.micro3d
 
 import com.fazecast.jSerialComm.SerialPort
+import info.benjaminhill.micro3d.GCodeCommand.GetPosition
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.IOException
 import java.util.*
+import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration.Companion.seconds
+
+
 
 class Simple3D : AutoCloseable {
 
     private lateinit var serialPort: SerialPort
     private val scope = CoroutineScope(Dispatchers.IO + Job())
+
+    // Be sure to update once real location is known.
+    private var location: Point3D = Point3D()
 
     fun connectToPrinter() {
         serialPort = selectSerialPort()
@@ -28,9 +36,11 @@ class Simple3D : AutoCloseable {
             delay(2000) // Give the printer time to initialize
             clearBuffer()
             println("Ready to run.")
+
+            processCommands(flowOf(GetPosition))
         }
-        println("Switching to relative mode...")
-        sendGCode("G91") // switch to relative mode for the move commands
+        // println("Switching to relative mode...")
+        // sendGCode("G91") // switch to relative mode for the move commands
     }
 
     private fun selectSerialPort(): SerialPort {
@@ -58,31 +68,33 @@ class Simple3D : AutoCloseable {
                 serialPort.outputStream.flush()
             }
             println("Sent GCode: `${command.trim()}`") // Log after sending, inside the launch
-            waitForOk()
+            waitFor("ok")
         } catch (e: IOException) {
-            println("Error sending GCode: ${e.message}")
+            printErrln("Error sending GCode: ${e.message}")
         }
     }
 
     /** After every sendGCode.  Important to use withContext(Dispatchers.IO) */
-    private suspend fun waitForOk() = withContext(Dispatchers.IO) {
+    private suspend fun waitFor(allDoneIndicator:String = "ok"):String = withContext(Dispatchers.IO) {
         val response = StringBuilder()
-        withTimeoutOrNull(5_000) {
-            while (true) {
+        val foundIndicator = AtomicBoolean(false)
+        withTimeoutOrNull(5.seconds) {
+            while(!foundIndicator.get()) {
                 val available = serialPort.inputStream.available()
                 if (available > 0) {
                     val buffer = ByteArray(available)
                     val bytesRead = serialPort.inputStream.read(buffer)
                     response.append(String(buffer, 0, bytesRead))
-                    if (response.contains("ok")) {
-                        println("Received: ${response.trim()}")
-                        return@withTimeoutOrNull
+                    // Special handling for replies like getpos
+                    if (response.contains(allDoneIndicator)) {
+                        foundIndicator.set(true)
                     }
                 } else {
                     delay(50)
                 }
             }
-        } ?: println("Timeout waiting for 'ok' response. Received: '${response.trim()}'")
+        } ?: printErrln("Timeout > ${5.seconds} while waiting for `$allDoneIndicator`")
+        return@withContext response.trim().toString()
     }
 
     /** After initial connection */
@@ -118,7 +130,7 @@ class Simple3D : AutoCloseable {
                 is Exit -> { /* Handled by takeWhile. */
                 }
 
-                is GCodeCommand -> sendGCode(command.toGCode())
+                is GCodeCommand -> sendGCode(command.toGCode(location))
                 is RawGCode -> sendGCode(command.rawGCode)
             }
         }
@@ -138,6 +150,13 @@ class Simple3D : AutoCloseable {
                 println("Disconnected from printer.")
             }
             scope.cancel()
+        }
+    }
+
+    companion object {
+
+        fun printErrln(msg: String) {
+            System.err.println(msg)
         }
     }
 }

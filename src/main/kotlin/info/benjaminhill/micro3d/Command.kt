@@ -33,44 +33,34 @@ data class RawGCode(val rawGCode: String) : Command("g") {
 
 /** commands that require translating to GCode */
 sealed class GCodeCommand(trigger: String) : Command(trigger) {
-    abstract fun toGCode(): String
+    abstract fun toGCode(location: Point3D? = null): String
 
-    class MoveXPlus : GCodeCommand("q") {
-        // G91 = relative.  G0 = non-extruder
-        override fun toGCode(): String = RELATIVE_MOVE.format('X', STEP_SIZE)
+    abstract class AbsoluteMove(trigger: String, val axisName: String, val stepDirection: Int) :
+        GCodeCommand(trigger) {
+        private val stepSize: Double = 1.0 // Smallest move. Adjust if needed.
+
+        // G1 for a precision move
+        private val gcodeAbsoluteMove = "G1 %s%.2f"
+        override fun toGCode(location: Point3D?): String {
+            location!! += axisName to (stepDirection * stepSize)
+            return gcodeAbsoluteMove.format(axisName, location[axisName])
+        }
     }
 
-    class MoveXNeg : GCodeCommand("a") {
-        override fun toGCode(): String = RELATIVE_MOVE.format('X', -STEP_SIZE)
-    }
+    class MoveXPlus() : AbsoluteMove("q", "X", 1)
+    class MoveXNeg() : AbsoluteMove("a", "X", -1)
 
-    class MoveYPlus : GCodeCommand("w") {
-        override fun toGCode(): String = RELATIVE_MOVE.format('Y', STEP_SIZE)
-    }
+    class MoveYPlus() : AbsoluteMove("w", "Y",  1)
+    class MoveYNeg() : AbsoluteMove("s", "Y",  -1)
 
-    class MoveYNeg : GCodeCommand("s") {
-        override fun toGCode(): String = RELATIVE_MOVE.format('Y', -STEP_SIZE)
-    }
-
-    class MoveZPlus : GCodeCommand("e") {
-        override fun toGCode(): String = RELATIVE_MOVE.format('Z', STEP_SIZE)
-    }
-
-    class MoveZNeg : GCodeCommand("d") {
-        override fun toGCode(): String = RELATIVE_MOVE.format('Z', -STEP_SIZE)
-    }
+    class MoveZPlus() : AbsoluteMove("e", "Z",  1)
+    class MoveZNeg() : AbsoluteMove("d", "Z", -1)
 
     data object Home : GCodeCommand("home") {
-        override fun toGCode(): String = "G28"
+        override fun toGCode(location: Point3D?): String = "G28"
     }
 
     data object GetPosition : GCodeCommand("getpos") {
-        override fun toGCode(): String = "M114"
-    }
-
-    companion object {
-        const val STEP_SIZE: Double = 1.0 // Smallest move. Adjust if needed.
-
-        private const val RELATIVE_MOVE = "G1 %c%.2f"
+        override fun toGCode(location: Point3D?): String = "M114"
     }
 }
