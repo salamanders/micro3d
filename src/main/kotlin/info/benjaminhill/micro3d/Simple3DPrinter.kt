@@ -2,22 +2,25 @@ package info.benjaminhill.micro3d
 
 import com.fazecast.jSerialComm.SerialPort
 import info.benjaminhill.micro3d.GCodeCommand.GetPosition
+import info.benjaminhill.micro3d.GCodeCommand.Home
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
-
-
-class Simple3D : AutoCloseable {
+/**
+ * Keeps state like current location
+ */
+class Simple3DPrinter : AutoCloseable {
 
     private lateinit var serialPort: SerialPort
     private val scope = CoroutineScope(Dispatchers.IO + Job())
 
     // Be sure to update once real location is known.
-    private var location: Point3D = Point3D()
+    var location: Point3D = Point3D(103.0, 150.0, 10.0)
 
     fun connectToPrinter() {
         serialPort = selectSerialPort()
@@ -36,11 +39,9 @@ class Simple3D : AutoCloseable {
             delay(2000) // Give the printer time to initialize
             clearBuffer()
             println("Ready to run.")
-
-            processCommands(flowOf(GetPosition))
+            // Attempt to get actual start location
+            processCommands(flowOf(Home, GetPosition))
         }
-        // println("Switching to relative mode...")
-        // sendGCode("G91") // switch to relative mode for the move commands
     }
 
     private fun selectSerialPort(): SerialPort {
@@ -59,7 +60,7 @@ class Simple3D : AutoCloseable {
     }
 
 
-    private fun sendGCode(gcode: String) = scope.launch {
+    private fun sendGCode(gcode: String, duration: Duration = 5.seconds): String? = runBlocking {
         require(gcode.startsWith("g", true) || gcode.startsWith("m", true)) { "Rejecting command `${gcode.trim()}`." }
         val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
         try {
@@ -68,18 +69,19 @@ class Simple3D : AutoCloseable {
                 serialPort.outputStream.flush()
             }
             println("Sent GCode: `${command.trim()}`") // Log after sending, inside the launch
-            waitFor("ok")
+            return@runBlocking waitFor("ok", duration)
         } catch (e: IOException) {
-            printErrln("Error sending GCode: ${e.message}")
+            printErrorLn("Error sending GCode: ${e.message}")
         }
+        return@runBlocking null
     }
 
     /** After every sendGCode.  Important to use withContext(Dispatchers.IO) */
-    private suspend fun waitFor(allDoneIndicator:String = "ok"):String = withContext(Dispatchers.IO) {
+    private suspend fun waitFor(allDoneIndicator: String = "ok", duration: Duration): String = withContext(Dispatchers.IO) {
         val response = StringBuilder()
         val foundIndicator = AtomicBoolean(false)
-        withTimeoutOrNull(5.seconds) {
-            while(!foundIndicator.get()) {
+        withTimeoutOrNull(duration) {
+            while (!foundIndicator.get()) {
                 val available = serialPort.inputStream.available()
                 if (available > 0) {
                     val buffer = ByteArray(available)
@@ -93,7 +95,7 @@ class Simple3D : AutoCloseable {
                     delay(50)
                 }
             }
-        } ?: printErrln("Timeout > ${5.seconds} while waiting for `$allDoneIndicator`")
+        } ?: printErrorLn("Timeout > $duration while waiting for `$allDoneIndicator`")
         return@withContext response.trim().toString()
     }
 
@@ -110,14 +112,14 @@ class Simple3D : AutoCloseable {
             print("> ")
             val input = readlnOrNull()?.trim()?.lowercase(Locale.getDefault()) ?: continue
             val command = Command.fromInput(input)
-            command?.let { emit(it) } ?: println(
+            command?.let { emit(it) } ?: printErrorLn(
                 "Invalid command: '$input'.  ${
-                Command.values().joinToString(",") { it.trigger }
-            }")
+                    Command.values().joinToString(",") { it.trigger }
+                }")
         }
     }.onCompletion { cause ->
         if (cause != null) {
-            println("Command listener stopped: ${cause.message}")
+            printErrorLn("Command listener stopped: ${cause.message}")
         } else {
             println("Command listener stopped gracefully.")
         }
@@ -130,8 +132,8 @@ class Simple3D : AutoCloseable {
                 is Exit -> { /* Handled by takeWhile. */
                 }
 
-                is GCodeCommand -> sendGCode(command.toGCode(location))
-                is RawGCode -> sendGCode(command.rawGCode)
+                is GCodeCommand -> println(sendGCode(command.toGCode(location), command.duration))
+                is RawGCode -> println(sendGCode(command.rawGCode))
             }
         }
     }
@@ -144,7 +146,7 @@ class Simple3D : AutoCloseable {
                     serialPort.outputStream.close()
                     serialPort.inputStream.close()
                 } catch (e: IOException) {
-                    println("Error closing streams: ${e.message}")
+                    printErrorLn("Error closing streams: ${e.message}")
                 }
                 serialPort.closePort()
                 println("Disconnected from printer.")
@@ -155,7 +157,7 @@ class Simple3D : AutoCloseable {
 
     companion object {
 
-        fun printErrln(msg: String) {
+        fun printErrorLn(msg: String) {
             System.err.println(msg)
         }
     }
