@@ -34,8 +34,14 @@ class Simple3DPrinter : AutoCloseable {
             setFlowControl(SerialPort.FLOW_CONTROL_XONXOFF_IN_ENABLED or SerialPort.FLOW_CONTROL_XONXOFF_OUT_ENABLED)
         }
 
-        require(serialPort.openPort()) { "Failed to open port: ${serialPort.systemPortName}" }
-        println("Successfully connected to ${serialPort.systemPortName}")
+        //https://github.com/Fazecast/jSerialComm/issues/518 Error 31
+        serialPort.disablePortConfiguration()
+
+        if(serialPort.openPort()) {
+            println("Successfully connected to ${serialPort.systemPortName}")
+        } else {
+            error("Failed to open port: ${serialPort.systemPortName}, lastErrorCode:${serialPort.lastErrorCode}, lastErrorLocation:${serialPort.lastErrorLocation}")
+        }
 
         scope.launch {
             delay(2000) // Give the printer time to initialize
@@ -52,7 +58,7 @@ class Simple3DPrinter : AutoCloseable {
 
         println("Available serial ports:")
         ports.forEachIndexed { index, port ->
-            println("$index: ${port.systemPortName} - ${port.portDescription} - ${port.descriptivePortName}")
+            println("# $index: systemPortName:${port.systemPortName} portDescription:${port.portDescription} descriptivePortName:${port.descriptivePortName}")
             if (port.descriptivePortName.contains("3D Printer", true)) {
                 println("  -- best guess!")
             }
