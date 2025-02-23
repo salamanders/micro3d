@@ -22,6 +22,8 @@ class Simple3DPrinter : AutoCloseable {
     // Be sure to update once real location is known.
     var location: Point3D = Point3D(103.0, 150.0, 10.0)
 
+    val responses = PrinterResponse()
+
     fun connectToPrinter() {
         serialPort = selectSerialPort()
         serialPort.apply {
@@ -60,7 +62,7 @@ class Simple3DPrinter : AutoCloseable {
     }
 
 
-    private fun sendGCode(gcode: String, duration: Duration = 5.seconds): String? = runBlocking {
+    private fun sendGCode(gcode: String, duration: Duration = 5.seconds) = runBlocking {
         require(gcode.startsWith("g", true) || gcode.startsWith("m", true)) { "Rejecting command `${gcode.trim()}`." }
         val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
         try {
@@ -68,16 +70,16 @@ class Simple3DPrinter : AutoCloseable {
                 serialPort.outputStream.write(command.toByteArray())
                 serialPort.outputStream.flush()
             }
-            println("Sent GCode: `${command.trim()}`") // Log after sending, inside the launch
-            return@runBlocking waitFor("ok", duration)
+            responses.appendLog("SENT: `${command.trim()}`")
+            waitFor("ok", duration)
         } catch (e: IOException) {
             printErrorLn("Error sending GCode: ${e.message}")
         }
-        return@runBlocking null
+        return@runBlocking
     }
 
     /** After every sendGCode.  Important to use withContext(Dispatchers.IO) */
-    private suspend fun waitFor(allDoneIndicator: String = "ok", duration: Duration): String = withContext(Dispatchers.IO) {
+    private suspend fun waitFor(allDoneIndicator: String = "ok", duration: Duration) = withContext(Dispatchers.IO) {
         val response = StringBuilder()
         val foundIndicator = AtomicBoolean(false)
         withTimeoutOrNull(duration) {
@@ -95,8 +97,8 @@ class Simple3DPrinter : AutoCloseable {
                     delay(50)
                 }
             }
-        } ?: printErrorLn("Timeout > $duration while waiting for `$allDoneIndicator`")
-        return@withContext response.trim().toString()
+            responses.appendLog(response.trim().toString())
+        } ?: responses.appendLog("Timeout > $duration while waiting for `$allDoneIndicator`")
     }
 
     /** After initial connection */
@@ -132,8 +134,8 @@ class Simple3DPrinter : AutoCloseable {
                 is Exit -> { /* Handled by takeWhile. */
                 }
 
-                is GCodeCommand -> println(sendGCode(command.toGCode(location), command.duration))
-                is RawGCode -> println(sendGCode(command.rawGCode))
+                is GCodeCommand -> sendGCode(command.toGCode(location), command.duration)
+                is RawGCode -> sendGCode(command.rawGCode)
             }
         }
     }
