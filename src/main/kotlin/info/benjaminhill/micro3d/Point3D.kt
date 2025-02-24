@@ -1,37 +1,16 @@
 package info.benjaminhill.micro3d
 
-import java.util.*
-
-class Point3D(x: Double = 0.0, y: Double = 0.0, z: Double = 0.0) {
-
-    private val coordinates: EnumMap<Axis, Double> = EnumMap<Axis, Double>(Axis::class.java)
-
-    init {
-        coordinates[Axis.X] = x
-        coordinates[Axis.Y] = y
-        coordinates[Axis.Z] = z
-    }
-
-    operator fun get(axis: Axis): Double = coordinates.getValue(axis)
-
-    operator fun get(axisName: String): Double = get(Axis.valueOf(axisName))
-
-    operator fun set(axis: Axis, value: Double) {
-        coordinates[axis] = value
-    }
-
-    operator fun set(axisName: String, value: Double) = set(Axis.valueOf(axisName), value)
-
-    /** Number is the offset from the current location, provided to the printer as an absolute location */
-    operator fun plusAssign(other: Pair<Axis, Double>) {
-        val (axis, offset) = other
-        set(axis, get(axis) + offset)
-    }
+data class Point3D(val x:Double, val y:Double, val z:Double) {
     override fun toString(): String {
-        // G1 for a precision move
-        return "G1 " + Axis.entries.joinToString(" ") { "%s%.2f".format(it.name, coordinates[it]) }
+        return "G1 X%.2f Y%.2f Z%.2f".format(x, y, z)
     }
+
     companion object {
-        enum class Axis { X, Y, Z }
+        fun fromPosition(positionString:String) :Point3D {
+            val positionRe = """X:([0-9.]+) Y:([0-9.]+) Z:([0-9.]+)""".toRegex()
+            val (x, y, z) = positionRe.find(positionString)!!.groupValues.drop(1).map(String::toDouble)
+            return Point3D(x, y, z)
+        }
     }
+
 }

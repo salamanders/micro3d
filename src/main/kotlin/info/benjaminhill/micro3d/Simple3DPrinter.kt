@@ -1,172 +1,214 @@
 package info.benjaminhill.micro3d
 
-import com.fazecast.jSerialComm.SerialPort
-import info.benjaminhill.micro3d.GCodeCommand.GetPosition
-import info.benjaminhill.micro3d.GCodeCommand.Home
-import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.*
-import java.io.IOException
-import java.util.*
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.time.Duration
+import jssc.*
+import jssc.SerialPortList
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.runBlocking
+import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
-/**
- * Keeps state like current location
- */
-class Simple3DPrinter : AutoCloseable {
+const val SMALLEST_XY:Double = 0.1
+const val SMALLEST_Z:Double = 0.04
 
-    private lateinit var serialPort: SerialPort
-    private val scope = CoroutineScope(Dispatchers.IO + Job())
+class EasyPort(
+    portName: String, baudRate: Int = BAUDRATE_115200, dataBits: Int = DATABITS_8,
 
-    // Be sure to update once real location is known.
-    var location: Point3D = Point3D(103.0, 150.0, 10.0)
+    stopBits: Int = STOPBITS_1, parity: Int = PARITY_NONE
+) : SerialPort(portName), AutoCloseable {
+    lateinit var initString: String
 
-    val responses = PrinterResponse()
-
-    fun connectToPrinter() {
-        serialPort = selectSerialPort()
-        serialPort.apply {
-            baudRate = 115200
-            numDataBits = 8
-            numStopBits = 1
-            parity = SerialPort.NO_PARITY
-            setFlowControl(SerialPort.FLOW_CONTROL_XONXOFF_IN_ENABLED or SerialPort.FLOW_CONTROL_XONXOFF_OUT_ENABLED)
-        }
-
-        //https://github.com/Fazecast/jSerialComm/issues/518 Error 31
-        serialPort.disablePortConfiguration()
-
-        if(serialPort.openPort()) {
-            println("Successfully connected to ${serialPort.systemPortName}")
-        } else {
-            error("Failed to open port: ${serialPort.systemPortName}, lastErrorCode:${serialPort.lastErrorCode}, lastErrorLocation:${serialPort.lastErrorLocation}")
-        }
-
-        scope.launch {
-            delay(2000) // Give the printer time to initialize
-            clearBuffer()
-            println("Ready to run.")
-            // Attempt to get actual start location
-            processCommands(flowOf(Home, GetPosition))
-        }
+    init {
+        openPort()
+        setParams(baudRate, dataBits, stopBits, parity)
+        setFlowControlMode(FLOWCONTROL_XONXOFF_IN or FLOWCONTROL_XONXOFF_OUT)
     }
 
-    private fun selectSerialPort(): SerialPort {
-        val ports = SerialPort.getCommPorts()
-        require(ports.isNotEmpty()) { "No serial ports found. Is the printer connected and powered on?" }
-
-        println("Available serial ports:")
-        ports.forEachIndexed { index, port ->
-            println("# $index: systemPortName:${port.systemPortName} portDescription:${port.portDescription} descriptivePortName:${port.descriptivePortName}")
-            if (port.descriptivePortName.contains("3D Printer", true)) {
-                println("  -- best guess!")
-            }
-        }
-        print("Port number: ")
-        return ports[readln().toInt()]
+    suspend fun prepare() {
+        println("Pausing for 2 seconds, reading all in string.")
+        delay(2.seconds)
+        initString = readString()
+        //println("Purging port.")
+        //purgePort(PURGE_RXCLEAR or PURGE_TXCLEAR)
+        //delay(2.seconds)
     }
 
 
-    private fun sendGCode(gcode: String, duration: Duration = 5.seconds) = runBlocking {
-        require(gcode.startsWith("g", true) || gcode.startsWith("m", true)) { "Rejecting command `${gcode.trim()}`." }
-        val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
-        try {
-            withContext(Dispatchers.IO) { // Correctly uses Dispatchers.IO for blocking I/O
-                serialPort.outputStream.write(command.toByteArray())
-                serialPort.outputStream.flush()
-            }
-            responses.appendLog("SENT: `${command.trim()}`")
-            waitFor("ok", duration)
-        } catch (e: IOException) {
-            printErrorLn("Error sending GCode: ${e.message}")
-        }
-        return@runBlocking
-    }
-
-    /** After every sendGCode.  Important to use withContext(Dispatchers.IO) */
-    private suspend fun waitFor(allDoneIndicator: String = "ok", duration: Duration) = withContext(Dispatchers.IO) {
-        val response = StringBuilder()
-        val foundIndicator = AtomicBoolean(false)
-        withTimeoutOrNull(duration) {
-            while (!foundIndicator.get()) {
-                val available = serialPort.inputStream.available()
-                if (available > 0) {
-                    val buffer = ByteArray(available)
-                    val bytesRead = serialPort.inputStream.read(buffer)
-                    response.append(String(buffer, 0, bytesRead))
-                    // Special handling for replies like getpos
-                    if (response.contains(allDoneIndicator)) {
-                        foundIndicator.set(true)
-                    }
+    private fun portToFlow(): Flow<String> = channelFlow {
+        var lookingForOk = true
+        val buffer = StringBuilder()
+        while (lookingForOk) {
+            readString()?.let { buffer.append(it) }
+            val newlineIndex = buffer.indexOf('\n')
+            if (newlineIndex > -1) {
+                val line = buffer.substring(0, newlineIndex)
+                buffer.delete(0, newlineIndex + 1) // Remove the emitted line and newline
+                if (line.trim() == "ok") {
+                    lookingForOk = false
                 } else {
-                    delay(50)
+                    send(line)
                 }
             }
-            responses.appendLog(response.trim().toString())
-        } ?: responses.appendLog("Timeout > $duration while waiting for `$allDoneIndicator`")
-    }
-
-    /** After initial connection */
-    private suspend fun clearBuffer() = withContext(Dispatchers.IO) {
-        while (serialPort.inputStream.available() > 0) {
-            serialPort.inputStream.read() // Read and discard
-        }
-        println("Buffer cleared.")
-    }
-
-    fun listenForCommands(): Flow<Command> = flow {
-        while (true) {
-            print("> ")
-            val input = readlnOrNull()?.trim()?.lowercase(Locale.getDefault()) ?: continue
-            val command = Command.fromInput(input)
-            command?.let { emit(it) } ?: printErrorLn(
-                "Invalid command: '$input'.  ${
-                    Command.values().joinToString(",") { it.trigger }
-                }")
-        }
-    }.onCompletion { cause ->
-        if (cause != null) {
-            printErrorLn("Command listener stopped: ${cause.message}")
-        } else {
-            println("Command listener stopped gracefully.")
-        }
-    }.flowOn(Dispatchers.IO)
-
-    //  Separate function to process the command Flow.
-    suspend fun processCommands(commandFlow: Flow<Command>) {
-        commandFlow.takeWhile { it != Exit }.collect { command ->
-            when (command) {
-                is Exit -> { /* Handled by takeWhile. */
-                }
-
-                is GCodeCommand -> sendGCode(command.toGCode(location), command.duration)
-                is RawGCode -> sendGCode(command.rawGCode)
+            if (lookingForOk) {
+                delay(50.milliseconds)
             }
         }
+    }
+
+    suspend fun writeAndWait(gcode:String):List<String> {
+        val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
+        require(writeString(command))
+        return portToFlow().toList()
     }
 
     override fun close() {
-        runBlocking {  // wait for cleanup
-            if (::serialPort.isInitialized && serialPort.isOpen) {
-                sendGCode("M84") // Disable steppers
-                try {
-                    serialPort.outputStream.close()
-                    serialPort.inputStream.close()
-                } catch (e: IOException) {
-                    printErrorLn("Error closing streams: ${e.message}")
-                }
-                serialPort.closePort()
-                println("Disconnected from printer.")
-            }
-            scope.cancel()
-        }
+        closePort()
     }
 
     companion object {
+        private fun choosePort(): String {
+            val ports = SerialPortList.getPortNames()
+            println("Found ${ports.size} ports.")
+            require(ports.isNotEmpty()) { "Must have found at least one port to choose." }
 
-        fun printErrorLn(msg: String) {
-            System.err.println(msg)
+            if (ports.size > 1) {
+                ports.forEach {
+                    println("  $it")
+                }
+                print("PORT? >")
+                return readln().also { require(it in ports) }
+            }
+            return ports.first()
+        }
+
+        suspend fun connect(): EasyPort {
+            val portName = choosePort()
+            val ep = EasyPort(portName)
+            ep.prepare()
+            return ep
         }
     }
 }
+
+
+fun main() = runBlocking {
+    EasyPort.connect().use { port ->
+        println("Homing `G28`.")
+        val homingResults = port.writeAndWait("G28")
+        println("Homing results:")
+        println(homingResults.joinToString(separator = "\n  ", prefix = "  "))
+        println("Getting position M114.")
+        val positionResults = port.writeAndWait("M114")
+        println("Position results:")
+        println(positionResults.joinToString(separator = "\n  ", prefix = "  "))
+        val originalLocation = Point3D.fromPosition(positionResults.first())
+        println("Original location: `$originalLocation`")
+        repeat(100) { yi ->
+            val yStartLocation = originalLocation.copy(y = originalLocation.y + yi * SMALLEST_XY)
+            println("yStartLocation: `$yStartLocation`")
+
+            repeat(100) { xi ->
+                val xLocation = yStartLocation.copy(x = yStartLocation.x + xi * SMALLEST_XY)
+                println("xLocation: `$xLocation`")
+                port.writeAndWait(xLocation.toString())
+            }
+        }
+    }
+    println("Ending app.")
+}
+
+
+//
+//fun writeData() {
+//    val port = SerialPort("COM10")
+//    port.openPort()
+//    port.setParams(BAUDRATE_115200, DATABITS_8, STOPBITS_1, PARITY_NONE)
+//    port.writeBytes("Testing serial from Kotlin".encodeToByteArray())
+//    // The following shows up in the serial port (prettified for readability):
+//    // 54 65 73 74 69 6E 67 20 73 65 72 69 61 6C 20 66 72 6F 6D 20 4B 6F 74 6C 69 6E
+//    port.closePort()
+//}
+//
+//fun readData() {
+//    val port = SerialPort("COM10")
+//    port.openPort()
+//    port.setParams(BAUDRATE_115200, DATABITS_8, STOPBITS_1, PARITY_NONE)
+//    // port.setParams(9600, 8, 1, 0); // alternate technique
+//    val buffer = port.readBytes(10 /* read the first 10 bytes */)
+//    // Print the buffer but pretty, with spaces between bytes and padding to two characters with 0
+//    // See below for implementation
+//    println(buffer.fancyToString())
+//    // Using the same bytes as used in the writeData() method above we get:
+//    // 54 65 73 74 69 6E 67 20 73 65 72 69 61 6C 20 66 72 6F 6D 20 4B 6F 74 6C 69 6E
+//    port.closePort()
+//}
+//
+//fun eventListener() {
+//    val port = SerialPort("COM10")
+//    port.openPort()
+//    port.setParams(BAUDRATE_115200, DATABITS_8, STOPBITS_1, PARITY_NONE)
+//    // port.setParams(9600, 8, 1, 0); // alternate technique
+//    val mask = MASK_RXCHAR + MASK_CTS + MASK_DSR
+//    port.eventsMask = mask
+//    port.addEventListener(MyPortListener(port))
+//}
+//
+///*
+// * In this class must implement the method serialEvent, through it we learn about
+// * events that happened to our port. But we will not report on all events but only
+// * those that we put in the mask. In this case the arrival of the data and change the
+// * status lines CTS and DSR
+// */
+//internal class MyPortListener(private val port: SerialPort) : SerialPortEventListener {
+//    override fun serialEvent(event: SerialPortEvent) {
+//        when {
+//            event.isRXCHAR -> { // data is available
+//                // read data, if 10 bytes available
+//                if (event.eventValue == 10) {
+//                    try {
+//                        println(port.readBytes(10).fancyToString())
+//                    } catch (ex: SerialPortException) {
+//                        println(ex)
+//                    }
+//                }
+//            }
+//
+//            event.isCTS -> { // CTS line has changed state
+//                if (event.eventValue == 1) { // line is ON
+//                    println("CTS - ON")
+//                } else {
+//                    println("CTS - OFF")
+//                }
+//            }
+//
+//            event.isDSR -> { // DSR line has changed state
+//                if (event.eventValue == 1) { // line is ON
+//                    println("DSR - ON")
+//                } else {
+//                    println("DSR - OFF")
+//                }
+//            }
+//        }
+//    }
+//}
+//
+//// Please note that Unsigned Integers are a stable feature in Kotlin version >= 1.5
+//// This is an extension function for ByteArrays to print them as unsigned hexadecimals
+//@OptIn(ExperimentalUnsignedTypes::class)
+//private fun ByteArray.fancyToString(): String {
+//    var res = ""
+//    // Converts each element from a signed byte to an unsigned byte
+//    this.asUByteArray().forEach {
+//        // Returns the bytes as two hexadecimals, separated by spaces per pair. Fills out the leading zero if necessary
+//        res += it.toString(16).uppercase(Locale.getDefault()).padStart(2, '0').padEnd(3, ' ')
+//    }
+//    // And remove the trailing whitespace
+//    return res.trim()
+//}
+//
+//@OptIn(ExperimentalUnsignedTypes::class)
+//private fun ByteArray.fancyToString2(): String {
+//    return this.asUByteArray().joinToString(" ") { it.toString(16).uppercase(Locale.US).padStart(2, '0') }
+//}
