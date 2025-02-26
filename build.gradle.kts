@@ -10,7 +10,6 @@ repositories {
 }
 
 dependencies {
-    implementation("com.fazecast:jSerialComm:2.11.0")
     implementation("io.github.java-native:jssc:2.9.6")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.1")
 
