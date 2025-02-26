@@ -1,19 +1,26 @@
 package info.benjaminhill.micro3d
 
 import jssc.SerialPort
+import jssc.SerialPort.BAUDRATE_115200
+import jssc.SerialPort.DATABITS_8
+import jssc.SerialPort.FLOWCONTROL_XONXOFF_IN
+import jssc.SerialPort.FLOWCONTROL_XONXOFF_OUT
+import jssc.SerialPort.MASK_RXCHAR
+import jssc.SerialPort.PARITY_NONE
+import jssc.SerialPort.STOPBITS_1
 import jssc.SerialPortEvent
 import jssc.SerialPortList
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.channels.onSuccess
 import kotlinx.coroutines.channels.trySendBlocking
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.runBlocking
-import kotlin.time.Duration.Companion.seconds
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.onCompletion
+import kotlinx.coroutines.flow.takeWhile
+import kotlinx.coroutines.flow.toList
+import kotlin.collections.contains
 
-const val SMALLEST_XY: Double = 0.1
-const val SMALLEST_Z: Double = 0.04
 
 class EasyPort(
     portName: String, baudRate: Int = BAUDRATE_115200, dataBits: Int = DATABITS_8,
@@ -53,23 +60,11 @@ class EasyPort(
             println("receiveFlow onCompletion")
         }
     }
-
-
-    suspend fun prepare() {
-        println("Pausing for 2 seconds, reading all in string.")
-        delay(2.seconds)
-        initString = readString()
-        //println("Purging port.")
-        //purgePort(PURGE_RXCLEAR or PURGE_TXCLEAR)
-        //delay(2.seconds)
-    }
-
     suspend fun writeAndWait(gcode: String): List<String> {
         val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
         require(writeString(command))
         return receiveFlow.takeWhile { it != "ok" }.toList()
     }
-
     override fun close() {
         closePort()
     }
@@ -92,39 +87,10 @@ class EasyPort(
             return ports.first()
         }
 
-        suspend fun connect(): EasyPort {
+        fun connect(): EasyPort {
             val portName = choosePort()
             val ep = EasyPort(portName)
-            ep.prepare()
             return ep
         }
     }
-}
-
-
-fun main() = runBlocking {
-    EasyPort.connect().use { port ->
-        println("Homing `G28`.")
-        val homingResults = port.writeAndWait("G28")
-        println("Homing results:")
-        println(homingResults.joinToString(separator = "\n  ", prefix = "  "))
-        println("Getting position M114.")
-        val positionResults = port.writeAndWait("M114")
-        println("Position results:")
-        println(positionResults.joinToString(separator = "\n  ", prefix = "  "))
-        val originalLocation = Point3D.fromPosition(positionResults.first())
-        println("Original location: `$originalLocation`")
-
-        repeat(100) { yi ->
-            val yStartLocation = originalLocation.copy(y = originalLocation.y + yi * SMALLEST_XY)
-            println("yStartLocation: `$yStartLocation`")
-
-            repeat(100) { xi ->
-                val xLocation = yStartLocation.copy(x = yStartLocation.x + xi * SMALLEST_XY)
-                println("xLocation: `$xLocation`")
-                port.writeAndWait(xLocation.toString())
-            }
-        }
-    }
-    println("Ending app.")
 }
