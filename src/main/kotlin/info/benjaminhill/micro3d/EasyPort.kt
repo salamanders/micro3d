@@ -1,25 +1,13 @@
 package info.benjaminhill.micro3d
 
 import jssc.SerialPort
-import jssc.SerialPort.BAUDRATE_115200
-import jssc.SerialPort.DATABITS_8
-import jssc.SerialPort.FLOWCONTROL_XONXOFF_IN
-import jssc.SerialPort.FLOWCONTROL_XONXOFF_OUT
-import jssc.SerialPort.MASK_RXCHAR
-import jssc.SerialPort.PARITY_NONE
-import jssc.SerialPort.STOPBITS_1
 import jssc.SerialPortEvent
 import jssc.SerialPortList
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.channels.onSuccess
 import kotlinx.coroutines.channels.trySendBlocking
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.onCompletion
-import kotlinx.coroutines.flow.takeWhile
-import kotlinx.coroutines.flow.toList
-import kotlin.collections.contains
+import kotlinx.coroutines.flow.*
 
 
 class EasyPort(
@@ -45,7 +33,8 @@ class EasyPort(
                         val newlineIndex = buffer.indexOfOrNull('\n') ?: break
                         val line = buffer.substring(0, newlineIndex)
                         buffer.delete(0, newlineIndex + 1)
-                        trySendBlocking(line).onSuccess { }.onFailure { t: Throwable? -> println("Bad things: $t") }
+                        trySendBlocking(line).onSuccess { }
+                            .onFailure { t: Throwable? -> println("trySendBlocking failure: $t") }
                     }
                 }
             }
@@ -59,12 +48,15 @@ class EasyPort(
         }.onCompletion {
             println("receiveFlow onCompletion")
         }
+        println("Connected to port `$portName`")
     }
+
     suspend fun writeAndWait(gcode: String): List<String> {
         val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
         require(writeString(command))
         return receiveFlow.takeWhile { it != "ok" }.toList()
     }
+
     override fun close() {
         closePort()
     }
@@ -78,11 +70,11 @@ class EasyPort(
             require(ports.isNotEmpty()) { "Must have found at least one port to choose." }
 
             if (ports.size > 1) {
-                ports.forEach {
-                    println("  $it")
+                ports.forEachIndexed { idx, port->
+                    println("$idx: $port")
                 }
                 print("PORT? >")
-                return readln().also { require(it in ports) }
+                return ports[readln().toInt()]
             }
             return ports.first()
         }
