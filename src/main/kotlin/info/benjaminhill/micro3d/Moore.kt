@@ -1,7 +1,5 @@
 package info.benjaminhill.micro3d
 
-import info.benjaminhill.micro3d.Paths.toUnitXY
-
 object Paths {
 
     fun expandLSystem(axiom: String, rules: Map<Char, String>, iterations: Int): List<Char> =

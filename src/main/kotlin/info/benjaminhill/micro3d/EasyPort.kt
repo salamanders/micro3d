@@ -70,7 +70,7 @@ class EasyPort(
             require(ports.isNotEmpty()) { "Must have found at least one port to choose." }
 
             if (ports.size > 1) {
-                ports.forEachIndexed { idx, port->
+                ports.forEachIndexed { idx, port ->
                     println("$idx: $port")
                 }
                 print("PORT? >")

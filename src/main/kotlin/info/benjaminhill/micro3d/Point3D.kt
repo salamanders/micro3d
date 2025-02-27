@@ -3,7 +3,6 @@ package info.benjaminhill.micro3d
 import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlin.math.abs
-import kotlin.math.pow
 
 data class Point3D(val x: Double, val y: Double, val z: Double) {
     override fun toString(): String {
@@ -23,7 +22,7 @@ data class Point3D(val x: Double, val y: Double, val z: Double) {
         const val EPSILON = 1e-6 // Define a small tolerance for near-zero values
 
         private fun Double.roundToZeroIfClose(): Double {
-            return if (abs(this) < EPSILON) 0.0 else (this*100)
+            return if (abs(this) < EPSILON) 0.0 else (this * 100)
         }
 
         fun fromPosition(positionString: String): Point3D {
@@ -32,7 +31,7 @@ data class Point3D(val x: Double, val y: Double, val z: Double) {
             return Point3D(x, y, z)
         }
 
-        fun Double.round(decimals: Int=2): Double =
+        fun Double.round(decimals: Int = 2): Double =
             BigDecimal(this).setScale(decimals, RoundingMode.HALF_EVEN).toDouble()
     }
 

@@ -28,7 +28,7 @@ object LogViewer : AutoCloseable {
         }
     }
 
-     fun appendLog(message: String) {
+    fun appendLog(message: String) {
         SwingUtilities.invokeLater {
             textArea.append("$message\n")
         }

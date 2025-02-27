@@ -1,10 +1,6 @@
 package info.benjaminhill.micro3d
 
 import info.benjaminhill.micro3d.Paths.toUnitXY
-import nu.pattern.OpenCV
-import org.opencv.videoio.VideoCapture
-import org.opencv.core.Mat
-import org.opencv.imgcodecs.Imgcodecs
 
 const val SMALLEST_XY: Double = 0.1
 const val SMALLEST_Z: Double = 0.04
