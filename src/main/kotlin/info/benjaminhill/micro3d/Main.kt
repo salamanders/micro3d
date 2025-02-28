@@ -7,25 +7,23 @@ const val SMALLEST_Z: Double = 0.04
 
 suspend fun main() {
     EasyCamera().use { cam ->
-        cam.capture("test")
-    }
+        EasyPort.connect().use { port ->
+            val startingPoint: Point3D = GCodeCommand.POS.result(port)
+            println("Currently at point $startingPoint")
 
-    EasyPort.connect().use { port ->
-        val posStr = port.writeAndWait("M114").first { it.contains("X:") }
-        val startingPoint = Point3D.fromPosition(posStr)
-
-        Paths.mooreCurve().toUnitXY()
-            .map { (x, y) ->
-                Point3D(
-                    x = x.toDouble() + startingPoint.x,
-                    y = y.toDouble() + startingPoint.y,
-                    z = startingPoint.z
-                )
-            }
-
-            .forEach { point ->
-                port.writeAndWait(point.toString())
-            }
+            Paths.mooreCurve().toUnitXY()
+                .map { (x, y) ->
+                    Point3D(
+                        x = x.toDouble() + startingPoint.x,
+                        y = y.toDouble() + startingPoint.y,
+                        z = startingPoint.z
+                    )
+                }
+                .forEach { point ->
+                    port.writeAndWait(point.toString())
+                    cam.capture("test_${point.x}_${point.y}")
+                }
+        }
 
     }
 }
