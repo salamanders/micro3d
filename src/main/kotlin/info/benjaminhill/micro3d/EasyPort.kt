@@ -16,6 +16,8 @@ import kotlinx.coroutines.flow.*
 
 /**
  * Simplified interface for interacting with a serial port, specifically for sending G-code commands.
+ * All commands written to the port wait for an "ok" reply
+ *
  * @param portName The name of the serial port to connect to (e.g., "COM3", "/dev/ttyUSB0").
  * @param baudRate The baud rate for the serial communication (default: 115200).
  * @param dataBits The number of data bits (default: 8).
@@ -87,7 +89,7 @@ class EasyPort(
                 ports.forEachIndexed { idx, port ->
                     println("$idx: $port")
                 }
-                print("PORT? >")
+                print("PORT? > ")
                 return ports[readln().toInt()]
             }
             return ports.first()

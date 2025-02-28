@@ -18,7 +18,8 @@ object Paths {
      * @param iterations The number of times to apply the expansion rules.
      * @return A list of characters representing the final expanded string.
      */
-    fun expandLSystem(axiom: String, rules: Map<Char, String>, iterations: Int): List<Char> =
+    @SuppressWarnings("SameParameterValue")
+    private fun expandLSystem(axiom: String, rules: Map<Char, String>, iterations: Int): List<Char> =
         (1..iterations).fold(axiom) { currentString, _ -> // Using a range for iterations
             currentString.map { c ->
                 rules[c] ?: c.toString()

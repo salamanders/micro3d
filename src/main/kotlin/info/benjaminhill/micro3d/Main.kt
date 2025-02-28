@@ -1,7 +1,9 @@
 package info.benjaminhill.micro3d
 
+import info.benjaminhill.micro3d.GCodeCommand.Companion.toGCode
 import info.benjaminhill.micro3d.Paths.toUnitXY
 
+// TODO: Can micro-stepping decrease this number?
 const val SMALLEST_XY: Double = 0.1
 const val SMALLEST_Z: Double = 0.04
 
@@ -20,7 +22,7 @@ suspend fun main() {
                     )
                 }
                 .forEach { point ->
-                    port.writeAndWait(point.toString())
+                    port.writeAndWait(point.toGCode())
                     cam.capture("test_${point.x}_${point.y}")
                 }
         }

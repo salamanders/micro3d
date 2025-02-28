@@ -17,14 +17,8 @@ class EasyCamera : AutoCloseable {
     }
 
     fun capture(id: String) {
-        if (!camera.isOpened) {
-            System.err.println("Error: Could not open camera")
-            return
-        }
-        if (!camera.read(frame)) {
-            System.err.println("Error: Could not read frame")
-            return
-        }
+        require(camera.isOpened) { "Error: Could not open camera" }
+        require(camera.read(frame)) { "Error: Could not read frame" }
         Imgcodecs.imwrite("capture_$id.png", frame)
         println("Image saved to captured_image.png")
     }
