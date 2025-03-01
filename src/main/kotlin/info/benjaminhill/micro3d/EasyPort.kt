@@ -1,8 +1,5 @@
 package info.benjaminhill.micro3d
 
-import info.benjaminhill.micro3d.PrettyPrint.ANSI_BLUE
-import info.benjaminhill.micro3d.PrettyPrint.ANSI_GREEN
-import info.benjaminhill.micro3d.PrettyPrint.ANSI_RESET
 import info.benjaminhill.micro3d.PrettyPrint.printlnBlue
 import info.benjaminhill.micro3d.PrettyPrint.printlnGreen
 import jssc.SerialPort
@@ -62,7 +59,9 @@ class EasyPort(
         }.onCompletion {
             println("receiveFlow onCompletion")
         }
-        println("Connected to port `$portName`. $ANSI_GREEN SEND $ANSI_RESET$ANSI_BLUE RECEIVE $ANSI_RESET")
+        println("Connected to port `$portName`")
+        printlnGreen("SEND")
+        printlnBlue("RECEIVE")
     }
 
     suspend fun writeAndWait(gcode: String): List<String> {
