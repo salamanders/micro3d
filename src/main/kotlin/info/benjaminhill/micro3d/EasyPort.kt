@@ -53,11 +53,11 @@ class EasyPort(
             addEventListener(listener)
 
             awaitClose {
-                println("receiveFlow closing, removeEventListener")
+                // println("receiveFlow closing, removeEventListener")
                 removeEventListener()
             }
         }.onCompletion {
-            println("receiveFlow onCompletion")
+            // println("receiveFlow onCompletion")
         }
         println("Connected to port `$portName`")
         printlnGreen("SEND")

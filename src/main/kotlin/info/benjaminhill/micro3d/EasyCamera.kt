@@ -4,15 +4,23 @@ import nu.pattern.OpenCV
 import org.opencv.core.Mat
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.videoio.VideoCapture
+import org.opencv.videoio.Videoio.CAP_PROP_FRAME_HEIGHT
+import org.opencv.videoio.Videoio.CAP_PROP_FRAME_WIDTH
 
-class EasyCamera : AutoCloseable {
+class EasyCamera(cameraIndex: Int = 0) : AutoCloseable {
     private val camera: VideoCapture
     private val frame: Mat
 
     init {
         OpenCV.loadLocally()
-        camera = VideoCapture(0)
+
+        camera = VideoCapture(cameraIndex)
         frame = Mat()
+    }
+
+    fun setResolution(width: Int, height: Int) {
+        require(camera.set(CAP_PROP_FRAME_WIDTH, width.toDouble()))
+        require(camera.set(CAP_PROP_FRAME_HEIGHT, height.toDouble()))
     }
 
     fun capture(fileName: String) {
