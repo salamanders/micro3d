@@ -23,11 +23,15 @@ class EasyCamera(cameraIndex: Int = 0) : AutoCloseable {
         require(camera.set(CAP_PROP_FRAME_HEIGHT, height.toDouble()))
     }
 
-    fun capture(fileName: String) {
-        val fileNameWithExtension = if (fileName.endsWith(".png", true)) fileName else "$fileName.png"
+    fun capture(): Mat {
         require(camera.isOpened) { "Error: Could not open camera" }
         require(camera.read(frame)) { "Error: Could not read frame" }
-        Imgcodecs.imwrite(fileNameWithExtension, frame)
+        return frame
+    }
+
+    fun capture(fileName: String) {
+        val fileNameWithExtension = if (fileName.endsWith(".png", true)) fileName else "$fileName.png"
+        Imgcodecs.imwrite(fileNameWithExtension, capture())
         println("Image saved to $fileNameWithExtension")
     }
 
