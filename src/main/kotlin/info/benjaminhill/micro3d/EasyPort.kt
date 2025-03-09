@@ -64,11 +64,11 @@ class EasyPort(
         printlnBlue("RECEIVE")
     }
 
-    suspend fun writeAndWait(gcode: String): List<String> {
-        val command = if (gcode.endsWith("\n")) gcode else "$gcode\n"
-        printlnGreen(command.trim())
-        require(writeString(command))
-        return receiveFlow.takeWhile { it != "ok" }
+    suspend fun writeAndWait(command: String, waitFor: String): List<String> {
+        val commandWithNewline = if (command.endsWith("\n")) command else "$command\n"
+        printlnGreen(commandWithNewline.trim())
+        require(writeString(commandWithNewline))
+        return receiveFlow.takeWhile { it != waitFor }
             .toList()
     }
 
