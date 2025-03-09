@@ -6,8 +6,7 @@ import org.opencv.core.Mat
 import org.opencv.core.MatOfDouble
 import org.opencv.imgproc.Imgproc
 
-class Focus {
-
+class ImageUtils {
 
     companion object {
         /** For focus.  Higher is better. */

@@ -1,7 +1,8 @@
 package info.benjaminhill.micro3d
 
-import info.benjaminhill.micro3d.PrettyPrint.printlnBlue
-import info.benjaminhill.micro3d.PrettyPrint.printlnGreen
+import info.benjaminhill.micro3d.ConsolePrettyPrint.printlnBlue
+import info.benjaminhill.micro3d.ConsolePrettyPrint.printlnError
+import info.benjaminhill.micro3d.ConsolePrettyPrint.printlnGreen
 import jssc.SerialPort
 import jssc.SerialPortEvent
 import jssc.SerialPortList
@@ -9,7 +10,10 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.onFailure
 import kotlinx.coroutines.channels.onSuccess
 import kotlinx.coroutines.channels.trySendBlocking
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.runBlocking
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Simplified interface for interacting with a serial port, specifically for sending G-code commands.
@@ -25,14 +29,29 @@ class EasyPort(
     portName: String, baudRate: Int = BAUDRATE_115200, dataBits: Int = DATABITS_8,
     stopBits: Int = STOPBITS_1, parity: Int = PARITY_NONE
 ) : SerialPort(portName), AutoCloseable {
-    private lateinit var initString: String
     private var receiveFlow: Flow<String>
 
     init {
         openPort()
+
+        Runtime.getRuntime().addShutdownHook(object : Thread() {
+            override fun run() {
+                if(this@EasyPort.closePort()) {
+                    printlnError("Port was closed through Shutdown Hook")
+                }
+            }
+        })
+
         setParams(baudRate, dataBits, stopBits, parity)
         setFlowControlMode(FLOWCONTROL_XONXOFF_IN or FLOWCONTROL_XONXOFF_OUT)
         eventsMask = MASK_RXCHAR
+
+        // discard anything already in the buffer
+        runBlocking {
+            delay(100.milliseconds)
+        }
+        this@EasyPort.purgePort(PURGE_RXCLEAR or PURGE_TXCLEAR)
+        readString()
 
         receiveFlow = callbackFlow<String> {
             val buffer = StringBuilder()
@@ -60,8 +79,8 @@ class EasyPort(
             // println("receiveFlow onCompletion")
         }
         println("Connected to port `$portName`")
-        printlnGreen("SEND")
-        printlnBlue("RECEIVE")
+        printlnGreen("  Color for SEND")
+        printlnBlue("  Color for RECEIVE")
     }
 
     suspend fun writeAndWait(command: String, waitFor: String): List<String> {

@@ -1,19 +1,21 @@
 package info.benjaminhill.micro3d
 
-import info.benjaminhill.micro3d.PrettyPrint.printlnError
+import info.benjaminhill.micro3d.ConsolePrettyPrint.printlnError
 import kotlinx.coroutines.runBlocking
 import kotlin.math.abs
+import kotlin.reflect.KCallable
+import kotlin.reflect.KClass
+import kotlin.reflect.full.memberFunctions
 
-class GCodeCommand(private val port: EasyPort) {
+class GCode(private val port: EasyPort) {
     private var currentLocation: Point3D
-
 
     private suspend fun writeAndWait(gcode: String) =
         port.writeAndWait(gcode, "ok")
 
     init {
         runBlocking {
-            print("Getting position...")
+            println("Setting up, getting initial position...")
             currentLocation = position()
             println("done getting position.")
         }
@@ -50,32 +52,32 @@ class GCodeCommand(private val port: EasyPort) {
             prefix.startsWith("r") -> right()
             prefix.startsWith("f") -> forward()
             prefix.startsWith("b") -> back()
+            prefix.startsWith("home") -> home()
             else -> printlnError("Unknown: `$prefix`")
         }
     }
 
-//    fun invokeUsingName(prefix: String) {
-//        val pthis = this
-//        val kClass: KClass<out GCodeCommand> = this::class
-//        val uFunctions = kClass.memberFunctions.filter { it.name.startsWith(prefix) }
-//        when {
-//            uFunctions.isEmpty() -> printlnError("No function starts with `$prefix`")
-//            uFunctions.size > 1 -> printlnError("More than one function starts with `$prefix`")
-//            else -> {
-//                val firstUFunction: KCallable<*> = uFunctions.first()
-//                println(firstUFunction.name)
-//                println(firstUFunction.parameters.size)
-//                firstUFunction.parameters.forEach { p->
-//                    println("  param: name:${p.name} kind:${p.kind} type:${p.type}")
-//                }
-//                try {
-//                    firstUFunction.call(this, this) // Invoke the function
-//                } catch (e: Exception) {
-//                    printlnError("Error invoking function: ${e.message}")
-//                }
-//            }
-//        }
-//    }
+    fun invokeUsingNameDynamic(prefix: String) {
+        val kClass: KClass<out GCode> = this::class
+        val uFunctions = kClass.memberFunctions.filter { it.name.startsWith(prefix) }
+        when {
+            uFunctions.isEmpty() -> printlnError("No function starts with `$prefix`")
+            uFunctions.size > 1 -> printlnError("More than one function starts with `$prefix`")
+            else -> {
+                val firstUFunction: KCallable<*> = uFunctions.first()
+                println(firstUFunction.name)
+                println(firstUFunction.parameters.size)
+                firstUFunction.parameters.forEach { p ->
+                    println("  param: name:${p.name} kind:${p.kind} type:${p.type}")
+                }
+                try {
+                    firstUFunction.call(this) // Invoke the function
+                } catch (e: Exception) {
+                    printlnError("Error invoking function: ${e.message}")
+                }
+            }
+        }
+    }
 
     companion object {
 

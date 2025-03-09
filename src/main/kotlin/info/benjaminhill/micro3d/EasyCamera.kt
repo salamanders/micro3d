@@ -1,11 +1,14 @@
 package info.benjaminhill.micro3d
 
+import kotlinx.coroutines.delay
 import nu.pattern.OpenCV
 import org.opencv.core.Mat
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.videoio.VideoCapture
 import org.opencv.videoio.Videoio.CAP_PROP_FRAME_HEIGHT
 import org.opencv.videoio.Videoio.CAP_PROP_FRAME_WIDTH
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.milliseconds
 
 class EasyCamera(cameraIndex: Int = 0) : AutoCloseable {
     private val camera: VideoCapture
@@ -23,15 +26,16 @@ class EasyCamera(cameraIndex: Int = 0) : AutoCloseable {
         require(camera.set(CAP_PROP_FRAME_HEIGHT, height.toDouble()))
     }
 
-    fun capture(): Mat {
+    suspend fun capture(waitBeforeCapture: Duration = 750.milliseconds): Mat {
         require(camera.isOpened) { "Error: Could not open camera" }
+        delay(waitBeforeCapture)
         require(camera.read(frame)) { "Error: Could not read frame" }
         return frame
     }
 
-    fun capture(fileName: String) {
+    suspend fun captureToFile(fileName: String, waitBeforeCapture: Duration = 750.milliseconds) {
         val fileNameWithExtension = if (fileName.endsWith(".png", true)) fileName else "$fileName.png"
-        Imgcodecs.imwrite(fileNameWithExtension, capture())
+        Imgcodecs.imwrite(fileNameWithExtension, capture(waitBeforeCapture))
         println("Image saved to $fileNameWithExtension")
     }
 

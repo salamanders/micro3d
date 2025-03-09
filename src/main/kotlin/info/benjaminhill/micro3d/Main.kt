@@ -1,9 +1,9 @@
 package info.benjaminhill.micro3d
 
-import info.benjaminhill.micro3d.GCodeCommand.Companion.SMALLEST_XY
-import info.benjaminhill.micro3d.GCodeCommand.Companion.SMALLEST_Z
+import info.benjaminhill.micro3d.ConsolePrettyPrint.round
+import info.benjaminhill.micro3d.GCode.Companion.SMALLEST_XY
+import info.benjaminhill.micro3d.GCode.Companion.SMALLEST_Z
 import info.benjaminhill.micro3d.Paths.toUnitXY
-import info.benjaminhill.micro3d.PrettyPrint.round
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import java.io.BufferedWriter
@@ -13,7 +13,6 @@ import java.io.PrintWriter
 import java.nio.file.Path
 import java.util.*
 import kotlin.io.path.createDirectories
-import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
 
 val exportDir: Path = Path.of("./output").also { it.createDirectories() }
@@ -24,7 +23,7 @@ suspend fun main() {
         EasyPort.connect().use { port ->
             delay(5.seconds)
             println("Starting commands")
-            val commands = GCodeCommand(port)
+            val commands = GCode(port)
             val app = MicroscopeCamera(cam, commands)
             println("Starting command loop")
             while (true) {
@@ -41,8 +40,7 @@ suspend fun main() {
     }
 }
 
-class MicroscopeCamera(private val cam: EasyCamera, private val commands: GCodeCommand) {
-
+class MicroscopeCamera(private val cam: EasyCamera, private val commands: GCode) {
 
     suspend fun focus(): Point3D {
         val sortedFocusSamples: NavigableMap<Point3D, Double> = TreeMap { p1, p2 ->
@@ -52,9 +50,9 @@ class MicroscopeCamera(private val cam: EasyCamera, private val commands: GCodeC
         suspend fun addLocationToStack(newPoint: Point3D) {
             sortedFocusSamples.getOrPut(newPoint) {
                 commands.jump(newPoint)
-                delay(750.milliseconds)
-                val newFocus = Focus.calculateLaplacianVariance(cam.capture())
-                cam.capture(exportDir.resolve("focus_${newPoint.z.round(2)}_${newFocus.toInt()}").toString())
+                val newFocus = ImageUtils.calculateLaplacianVariance(cam.capture())
+                val imageName = "focus_${newPoint.z.round(2)}_${newFocus.toInt()}"
+                cam.captureToFile(exportDir.resolve(imageName).toString())
                 println("Added new focus point to stack: ${newPoint.z} = $newFocus")
                 newFocus
             }
@@ -89,31 +87,35 @@ class MicroscopeCamera(private val cam: EasyCamera, private val commands: GCodeC
     suspend fun captureGrid() = runBlocking {
         val startPoint = commands.getLocation()
         println("Currently at point $startPoint")
-        val path = (listOf(0 to 0) + Paths.mooreCurve(3).toUnitXY())
+        val path = (listOf(0 to 0) + Paths.mooreCurve(2).toUnitXY())
             .map { (x, y) ->
-            Point3D(
-                x = x.toDouble() * SMALLEST_XY * 2 + startPoint.x,
-                y = y.toDouble() * SMALLEST_XY * 2 + startPoint.y,
-                z = startPoint.z,
-            )
-        }
+                Point3D(
+                    x = x.toDouble() * SMALLEST_XY * 2 + startPoint.x,
+                    y = y.toDouble() * SMALLEST_XY * 2 + startPoint.y,
+                    z = startPoint.z,
+                )
+            }
         println("Min/Max X: ${path.minOfOrNull { it.x }}, ${path.maxOfOrNull { it.x }}")
         println("Min/Max Y: ${path.minOfOrNull { it.y }}, ${path.maxOfOrNull { it.y }}")
 
-        PrintWriter(BufferedWriter(OutputStreamWriter(FileOutputStream(
-            exportDir.resolve("capture.pto").toFile())))).use { pto ->
+        PrintWriter(
+            BufferedWriter(
+                OutputStreamWriter(
+                    FileOutputStream(
+                        exportDir.resolve("capture.pto").toFile()
+                    )
+                )
+            )
+        ).use { pto ->
             path.forEachIndexed { idx, point ->
                 commands.jump(point)
-                delay(500.milliseconds)
                 val filename = "test_${idx.toString().padStart(4, '0')}_${point.x.round()}_${point.y.round()}.png"
-                cam.capture(exportDir.resolve(filename).toString())
+                cam.captureToFile(exportDir.resolve(filename).toString())
                 pto.println("i w640 h480 f0 v29.97 n\"$filename\" TrX0 TrY0 y0 p0 r0")
             }
         }
     }
-
 }
-
 
 
 

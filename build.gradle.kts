@@ -19,6 +19,15 @@ dependencies {
     implementation("org.slf4j:slf4j-simple:1.7.36")
     implementation("org.slf4j:slf4j-api:1.7.36")
     // testImplementation(kotlin("test"))
+
+    // for Point3D
+    // https://mvnrepository.com/artifact/org.openjfx/javafx
+    implementation("org.openjfx:javafx:23.0.2")
+
+    // https://mvnrepository.com/artifact/org.jetbrains.kotlin/kotlin-reflect
+    //runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.1.10")
+    implementation(kotlin("reflect"))
+
 }
 
 tasks.test {

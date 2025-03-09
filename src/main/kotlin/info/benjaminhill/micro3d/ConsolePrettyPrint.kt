@@ -4,7 +4,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 
 
-object PrettyPrint {
+object ConsolePrettyPrint {
     private const val ANSI_RESET = "\u001B[0m"
     private const val ANSI_GREEN = "\u001B[32m"
     private const val ANSI_RED = "\u001B[31m"
