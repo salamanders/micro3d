@@ -5,6 +5,7 @@ import info.benjaminhill.micro3d.ConsolePrettyPrint.printlnError
 import info.benjaminhill.micro3d.ConsolePrettyPrint.printlnGreen
 import jssc.SerialPort
 import jssc.SerialPortEvent
+import jssc.SerialPortException
 import jssc.SerialPortList
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.channels.onFailure
@@ -13,7 +14,10 @@ import kotlinx.coroutines.channels.trySendBlocking
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
+import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * Simplified interface for interacting with a serial port, specifically for sending G-code commands.
@@ -36,8 +40,12 @@ class EasyPort(
 
         Runtime.getRuntime().addShutdownHook(object : Thread() {
             override fun run() {
-                if(this@EasyPort.closePort()) {
-                    printlnError("Port was closed through Shutdown Hook")
+                try {
+                    if (this@EasyPort.closePort()) {
+                        printlnError("Port was closed through Shutdown Hook")
+                    }
+                } catch (e: SerialPortException) {
+                    // ignore
                 }
             }
         })
@@ -83,12 +91,14 @@ class EasyPort(
         printlnBlue("  Color for RECEIVE")
     }
 
-    suspend fun writeAndWait(command: String, waitFor: String): List<String> {
+    suspend fun writeAndWait(command: String, waitFor: String, maxDuration: Duration = 1.seconds): List<String> {
         val commandWithNewline = if (command.endsWith("\n")) command else "$command\n"
         printlnGreen(commandWithNewline.trim())
         require(writeString(commandWithNewline))
-        return receiveFlow.takeWhile { it != waitFor }
-            .toList()
+        return withTimeout(maxDuration) {
+            receiveFlow.takeWhile { it != waitFor }
+                .toList()
+        }
     }
 
     override fun close() {

@@ -44,16 +44,16 @@ class GCode(private val port: EasyPort) {
     suspend fun forward() = jump(currentLocation.copy(y = currentLocation.y + SMALLEST_XY))
     suspend fun back() = jump(currentLocation.copy(y = currentLocation.y - SMALLEST_XY))
 
-    suspend fun invokeUsingName(prefix: String) {
-        when {
-            prefix.startsWith("u") -> up()
-            prefix.startsWith("d") -> down()
-            prefix.startsWith("l") -> left()
-            prefix.startsWith("r") -> right()
-            prefix.startsWith("f") -> forward()
-            prefix.startsWith("b") -> back()
-            prefix.startsWith("home") -> home()
-            else -> printlnError("Unknown: `$prefix`")
+    suspend fun invokeUsingName(commandLetter: Char) {
+        when (commandLetter) {
+            'u' -> up()
+            'd' -> down()
+            'l' -> left()
+            'r' -> right()
+            'f' -> forward()
+            'b' -> back()
+            'h' -> home()
+            else -> printlnError("Unknown: `$commandLetter`")
         }
     }
 

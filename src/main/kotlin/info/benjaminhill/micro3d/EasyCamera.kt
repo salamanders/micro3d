@@ -5,10 +5,10 @@ import nu.pattern.OpenCV
 import org.opencv.core.Mat
 import org.opencv.imgcodecs.Imgcodecs
 import org.opencv.videoio.VideoCapture
-import org.opencv.videoio.Videoio.CAP_PROP_FRAME_HEIGHT
-import org.opencv.videoio.Videoio.CAP_PROP_FRAME_WIDTH
+import org.opencv.videoio.Videoio.*
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
+
 
 class EasyCamera(cameraIndex: Int = 0) : AutoCloseable {
     private val camera: VideoCapture
@@ -17,13 +17,19 @@ class EasyCamera(cameraIndex: Int = 0) : AutoCloseable {
     init {
         OpenCV.loadLocally()
 
-        camera = VideoCapture(cameraIndex)
+        camera = VideoCapture(cameraIndex, CAP_DSHOW)
         frame = Mat()
+
+        setResolution(640, 480)
     }
 
     fun setResolution(width: Int, height: Int) {
         require(camera.set(CAP_PROP_FRAME_WIDTH, width.toDouble()))
         require(camera.set(CAP_PROP_FRAME_HEIGHT, height.toDouble()))
+
+        val actualWidth = camera[CAP_PROP_FRAME_WIDTH]
+        val actualHeight = camera[CAP_PROP_FRAME_HEIGHT]
+        println("Attempted to set to:$width,$height.  Actual result:$actualWidth,$actualHeight")
     }
 
     suspend fun capture(waitBeforeCapture: Duration = 750.milliseconds): Mat {
