@@ -27,7 +27,7 @@ class MicroscopeCamera(private val printer: GCode) {
             suspend fun addLocationToStack(newPoint: Point3D) {
                 sortedFocusSamples.getOrPut(newPoint) {
                     printer.jump(newPoint)
-                    val newFocus = ImageUtils.calculateLaplacianVariance(cam.capture())
+                    val newFocus = ImageUtils.calculateLaplacianVariance(cam.captureMat())
                     val imageName = "focus_${newPoint.z.round(2)}_${newFocus.toInt()}"
                     cam.captureToFile(exportDir.resolve(imageName).toString())
                     println("Added new focus point to stack: ${newPoint.z} = $newFocus")
@@ -68,7 +68,7 @@ class MicroscopeCamera(private val printer: GCode) {
         }
     }
 
-    suspend fun captureStack() = runBlocking {
+    fun captureStack() = runBlocking {
         val startPoint = printer.getLocation()
         println("Currently at point $startPoint")
         EasyCamera(0).use { cam ->
@@ -82,7 +82,7 @@ class MicroscopeCamera(private val printer: GCode) {
     }
 
 
-    suspend fun captureGrid() = runBlocking {
+    fun captureGrid() = runBlocking {
         val startPoint = printer.getLocation()
 
         println("Currently at point $startPoint")

@@ -91,7 +91,7 @@ class EasyPort(
         printlnBlue("  Color for RECEIVE")
     }
 
-    suspend fun writeAndWait(command: String, waitFor: String, maxDuration: Duration = 1.seconds): List<String> {
+    suspend fun writeAndWait(command: String, waitFor: String, maxDuration: Duration = 2.seconds): List<String> {
         val commandWithNewline = if (command.endsWith("\n")) command else "$command\n"
         printlnGreen(commandWithNewline.trim())
         require(writeString(commandWithNewline))

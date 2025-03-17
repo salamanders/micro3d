@@ -6,12 +6,14 @@ import kotlin.math.abs
 import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
 import kotlin.reflect.full.memberFunctions
+import kotlin.time.Duration
+import kotlin.time.Duration.Companion.seconds
 
 class GCode(private val port: EasyPort) {
     private var currentLocation: Point3D
 
-    private suspend fun writeAndWait(gcode: String) =
-        port.writeAndWait(gcode, "ok")
+    private suspend fun writeAndWait(gcode: String, maxDuration: Duration = 2.seconds) =
+        port.writeAndWait(gcode, "ok", maxDuration)
 
     init {
         runBlocking {
@@ -31,7 +33,7 @@ class GCode(private val port: EasyPort) {
     suspend fun home() = writeAndWait("G28")
 
     private suspend fun position(): Point3D {
-        val positionString = writeAndWait("M114").first { it.contains("X:") }
+        val positionString = writeAndWait("M114", maxDuration = 5.seconds).first { it.contains("X:") }
         val positionRe = """X:(-?[0-9.]+) Y:(-?[0-9.]+) Z:(-?[0-9.]+)""".toRegex()
         val (x, y, z) = positionRe.find(positionString)!!.groupValues.drop(1).map(String::toDouble)
         return Point3D(x, y, z)
