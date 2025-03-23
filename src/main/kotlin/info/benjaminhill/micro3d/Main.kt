@@ -8,14 +8,6 @@ import kotlin.time.Duration.Companion.seconds
 val exportDir: Path = Path.of("./output").also { it.createDirectories() }
 
 suspend fun main() {
-    EasyCamera().use { camera ->
-        val image = camera.captureMat()
-        camera.captureToFile(exportDir.resolve("DELETEME.png").toString())
-    }
-    System.exit(0)
-
-
-
     EasyPort.connect().use { port ->
         delay(5.seconds)
         println("Starting commands")
