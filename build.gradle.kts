@@ -1,5 +1,8 @@
 plugins {
-    kotlin("jvm") version "2.1.0"
+    kotlin("jvm") version "2.2.10"
+    application
+    id("com.github.johnrengelman.shadow") version "8.1.1"
+
 }
 
 group = "info.benjaminhill"
@@ -12,8 +15,6 @@ repositories {
 dependencies {
     implementation("io.github.java-native:jssc:2.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-
-
 
     implementation("org.slf4j:slf4j-simple:2.0.17")
     implementation("org.slf4j:slf4j-api:2.0.17")
@@ -33,6 +34,10 @@ dependencies {
     //runtimeOnly("org.jetbrains.kotlin:kotlin-reflect:2.1.10")
     implementation(kotlin("reflect"))
 
+}
+
+application {
+    mainClass.set("info.benjaminhill.micro3d.MainKt")
 }
 
 tasks.test {

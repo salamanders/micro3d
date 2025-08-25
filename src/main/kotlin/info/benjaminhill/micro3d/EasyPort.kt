@@ -44,14 +44,14 @@ class EasyPort(
                     if (this@EasyPort.closePort()) {
                         printlnError("Port was closed through Shutdown Hook")
                     }
-                } catch (e: SerialPortException) {
+                } catch (_: SerialPortException) {
                     // ignore
                 }
             }
         })
 
         setParams(baudRate, dataBits, stopBits, parity)
-        setFlowControlMode(FLOWCONTROL_XONXOFF_IN or FLOWCONTROL_XONXOFF_OUT)
+        flowControlMode = FLOWCONTROL_XONXOFF_IN or FLOWCONTROL_XONXOFF_OUT
         eventsMask = MASK_RXCHAR
 
         // discard anything already in the buffer
